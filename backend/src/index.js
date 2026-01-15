@@ -1,86 +1,88 @@
-import express from 'express';
-import cors from 'cors';
-import dotenv from 'dotenv';
-import routes from './routes/index.routes.js';
-import { errorHandler } from './middleware/errorHandler.js';
-import { notFound } from './middleware/notFound.js';
+import express from "express";
+import cors from "cors";
+import dotenv from "dotenv";
+import routes from "./routes/index.routes.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { notFound } from "./middleware/notFound.js";
 
-// Load environment variables
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middleware
-// CORS configuration for production and development
-const allowedOrigins = process.env.FRONTEND_URL 
-  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
-  : ['http://localhost:5173', 'http://localhost:4173'];
+/* -------------------- MIDDLEWARE -------------------- */
 
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-    
-    // Check if origin is in allowed list
-    if (allowedOrigins.includes(origin) || allowedOrigins.some(allowed => origin?.startsWith(allowed))) {
-      callback(null, true);
-    } else {
-      // In production, be strict; in development, allow localhost
-      if (process.env.NODE_ENV === 'production') {
-        callback(new Error('Not allowed by CORS'));
-      } else {
-        callback(null, true);
+// Allowed origins
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(",").map(url => url.trim())
+  : ["http://localhost:5173", "http://localhost:4173"];
+
+// CORS setup
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow server-to-server, Postman, mobile apps
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOrigins.includes(origin) ||
+        allowedOrigins.some(allowed => origin.startsWith(allowed))
+      ) {
+        return callback(null, true);
       }
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Admin-Key']
-}));
+
+      // In production → block unknown origins
+      if (process.env.NODE_ENV === "production") {
+        return callback(new Error("Not allowed by CORS"));
+      }
+
+      // In development → allow
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Admin-Key"]
+  })
+);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// API Routes
-app.use('/api', routes);
-
-// 404 handler
-app.use(notFound);
-
-// Error handler
-app.use(errorHandler);
-
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit in production, just log
-  if (process.env.NODE_ENV === 'production') {
-    // In production, you might want to log to an error tracking service
-  }
+/* -------------------- ROOT TEST ROUTE -------------------- */
+app.get("/", (req, res) => {
+  res.send("🚀 MERN Backend is running successfully!");
 });
 
-// Handle uncaught exceptions
-process.on('uncaughtException', (error) => {
-  console.error('❌ Uncaught Exception:', error);
-  // Exit process in production for uncaught exceptions
+/* -------------------- API ROUTES -------------------- */
+app.use("/api", routes);
+
+/* -------------------- 404 HANDLER -------------------- */
+app.use(notFound);
+
+/* -------------------- ERROR HANDLER -------------------- */
+app.use(errorHandler);
+
+/* -------------------- START SERVER -------------------- */
+const server = app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(`🌐 Environment: ${process.env.NODE_ENV || "development"}`);
+});
+
+/* -------------------- PROCESS ERROR HANDLING -------------------- */
+
+// Server errors
+server.on("error", err => {
+  console.error("❌ Server error:", err);
   process.exit(1);
 });
 
-// Start server
-const server = app.listen(PORT, () => {
-  console.log(`🚀 Server is running on http://localhost:${PORT}`);
-  console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`🌐 CORS enabled for: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+// Promise errors
+process.on("unhandledRejection", err => {
+  console.error("❌ Unhandled Rejection:", err);
 });
 
-// Handle server errors
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use. Please free the port or change PORT in .env`);
-    console.error(`   To free port ${PORT}, run: netstat -ano | findstr :${PORT}`);
-    process.exit(1);
-  } else {
-    console.error('❌ Server error:', error);
-    process.exit(1);
-  }
+// Crash errors
+process.on("uncaughtException", err => {
+  console.error("❌ Uncaught Exception:", err);
+  process.exit(1);
 });
